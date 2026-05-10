@@ -85,7 +85,23 @@ bash start.sh     # 启动生产服务
 - StS2数据随Early Access持续更新，部分卡牌/敌人可能缺失
 - 所有数据本地存储，无云端依赖（除AI API调用）
 
----
+## 十一、PM2守护配置
 
-**开发：** Irra (CTO) @ 启明科技  
-**需求：** JiaWen (CEO)
+```javascript
+// ecosystem.config.js — PM2生产守护配置
+module.exports = {
+  apps: [{
+    name: 'spireguide',
+    script: 'index.js',
+    cwd: '06-交付/build/dist',
+    env: { NODE_ENV: 'production', PORT: '3001' },
+    autorestart: true,
+    max_memory_restart: '500M',
+  }],
+};
+```
+
+启动：`pm2 start ecosystem.config.js`
+查看状态：`pm2 status`
+重启：`pm2 restart spireguide`
+开机自启：`pm2 startup` → 复制粘贴输出命令 → `pm2 save`
