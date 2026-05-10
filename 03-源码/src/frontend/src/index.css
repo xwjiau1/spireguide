@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* 全局深色主题 */
+@layer base {
+  body {
+    @apply bg-spire-bg text-spire-text;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-spire-bg;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-spire-border rounded-full;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-spire-accent;
+  }
+}
+
+/* 卡牌稀有度颜色 */
+@layer components {
+  .rarity-basic { @apply text-gray-400; }
+  .rarity-common { @apply text-white; }
+  .rarity-uncommon { @apply text-blue-400; }
+  .rarity-rare { @apply text-yellow-400; }
+  .rarity-special { @apply text-purple-400; }
+
+  .card-type-attack { @apply border-red-500/50 bg-red-950/30; }
+  .card-type-skill { @apply border-blue-500/50 bg-blue-950/30; }
+  .card-type-power { @apply border-green-500/50 bg-green-950/30; }
+  .card-type-curse { @apply border-purple-500/50 bg-purple-950/30; }
+  .card-type-status { @apply border-gray-500/50 bg-gray-950/30; }
+}
