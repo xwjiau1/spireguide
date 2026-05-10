@@ -63,21 +63,18 @@ export const aiApi = {
     }),
 }
 
-// 系统配置API
-export const configApi = {
-  getAi: () =>
-    fetchApi<{ data: any }>('/config/ai'),
-  updateAi: (payload: any) =>
-    fetchApi<{ data: any }>('/config/ai', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-  testAi: (payload: any) =>
-    fetchApi<{ data: any }>('/config/ai/test', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+// QA历史记录API
+export const qaHistoryApi = {
+  list: (params?: { limit?: number; offset?: number }) => {
+    const search = new URLSearchParams()
+    if (params?.limit) search.append('limit', String(params.limit))
+    if (params?.offset) search.append('offset', String(params.offset))
+    const qs = search.toString()
+    return fetchApi<{ data: any[] }>(`/ai/history${qs ? '?' + qs : ''}`)
+  },
 }
+
+// 对局记录API
 export const sessionsApi = {
   list: () =>
     fetchApi<{ data: any[] }>('/sessions'),
@@ -90,6 +87,22 @@ export const sessionsApi = {
     fetchApi<{ data: any }>(`/sessions/${id}`),
   addScreenshot: (id: string, payload: any) =>
     fetchApi<{ data: any }>(`/sessions/${id}/screenshots`, {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+}
+
+// 系统配置API
+export const configApi = {
+  getAi: () =>
+    fetchApi<{ data: any }>('/config/ai'),
+  updateAi: (payload: any) =>
+    fetchApi<{ data: any }>('/config/ai', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  testAi: (payload: any) =>
+    fetchApi<{ data: any }>('/config/ai/test', {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

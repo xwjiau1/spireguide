@@ -1,205 +1,209 @@
 import { useState, useEffect } from 'react'
-import { Camera, Search, Shield, Zap, Trophy, BookOpen } from 'lucide-react'
-import { sessionsApi, cardsApi } from '../services/api'
+import {
+  Swords,
+  Database,
+  ShieldAlert,
+  Clock,
+  ChevronRight,
+  Zap,
+  TrendingUp,
+  AlertCircle,
+  Loader2,
+  ScrollText,
+} from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { enemiesApi, qaHistoryApi } from '../services/api'
 
 /**
- * 首页 — 按设计稿重构
- * 包含：欢迎Hero、快速卡片、问答历史、数据加载
+ * HomePage.tsx — 首页
+ * 欢迎Hero + 快速统计卡片 + 最近问答记录
  */
 
+interface QuickCard {
+  title: string
+  subtitle: string
+  icon: React.ElementType
+  action: string
+  path: string
+  color: string
+}
+
+interface QAItem {
+  id: number
+  question_type: string
+  question_text: string
+  ai_response: string
+  created_at: string
+}
+
 export default function HomePage() {
-  const [sessions, setSessions] = useState<any[]>([])
-  const [recentCards, setRecentCards] = useState<any[]>([])
+  const navigate = useNavigate()
+  const [featuredEnemy, setFeaturedEnemy] = useState<any>(null)
+  const [qaHistory, setQaHistory] = useState<QAItem[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadData()
+    const load = async () => {
+      try {
+        const [enemyRes, qaRes] = await Promise.all([
+          enemiesApi.list().catch(() => ({ data: [] })),
+          qaHistoryApi.list({ limit: 5 }).catch(() => ({ data: [] })),
+        ])
+        const enemies = enemyRes.data || []
+        // 取第一个BOSS类型敌人或第一个敌人作为"当前关注"
+        const boss = enemies.find((e: any) => e.type === 'boss') || enemies[0]
+        setFeaturedEnemy(boss)
+        setQaHistory(qaRes.data || [])
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
   }, [])
 
-  async function loadData() {
-    try {
-      setLoading(true)
-      const [sessionsRes, cardsRes] = await Promise.all([
-        sessionsApi.list(),
-        cardsApi.search(''),
-      ])
-      const sessionsData = (sessionsRes as any).data || []
-      const cardsData = (cardsRes as any).data || []
-      setSessions(sessionsData)
-      setRecentCards(cardsData.slice(0, 6))
-    } catch (err) {
-      console.error('首页数据加载失败:', err)
-    } finally {
-      setLoading(false)
-    }
+  const quickCards: QuickCard[] = [
+    {
+      title: featuredEnemy?.name_cn || '未知首领',
+      subtitle: featuredEnemy?.act ? `第${featuredEnemy.act}幕 · ${featuredEnemy.type === 'boss' ? 'BOSS' : '精英'}` : '加载中...',
+      icon: ShieldAlert,
+      action: '查看详情',
+      path: '/enemies',
+      color: 'text-spire-red',
+    },
+    {
+      title: '力量战',
+      subtitle: '铁甲战士 · 高进阶推荐',
+      icon: TrendingUp,
+      action: '浏览卡牌',
+      path: '/cards',
+      color: 'text-spire-accent',
+    },
+    {
+      title: 'v2.2.12',
+      subtitle: '数据库已更新 · 295张卡牌',
+      icon: Zap,
+      action: '更新日志',
+      path: '/cards',
+      color: 'text-spire-green',
+    },
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <Loader2 className="animate-spin text-spire-accent" size={32} />
+      </div>
+    )
   }
 
   return (
     <div className="space-y-6">
-      {/* 欢迎 Hero */}
-      <div className="bg-spire-surface border border-spire-border rounded-xl p-6 lg:p-8 animate-fade-in">
-        <div className="flex items-start gap-4">
-          <div className="w-14 h-14 rounded-xl bg-spire-accent/10 flex items-center justify-center flex-shrink-0 border border-spire-accent/20">
-            <span className="text-2xl">🏰</span>
-          </div>
-          <div className="flex-1">
-            <h2 className="text-xl font-bold mb-1">欢迎回来</h2>
-            <p className="text-spire-muted text-sm leading-relaxed">
-              正在游玩 <span className="text-spire-accent font-medium">杀戮尖塔</span>
-              {sessions.length > 0 && (
-                <>
-                  {' · '}
-                  <span className="text-spire-accent font-medium">
-                    {sessions[sessions.length - 1]?.character || '未选择角色'}
-                  </span>
-                </>
-              )}
+      {/* Hero 欢迎区 */}
+      <div className="spire-panel">
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-spire-text mb-1">
+              欢迎回来，尖塔挑战者
+            </h1>
+            <p className="text-sm text-spire-text-dim">
+              当前角色：<span className="text-spire-accent font-medium">铁甲战士</span> ·
+              进阶 <span className="text-spire-accent font-medium">7</span> ·
+              第 <span className="text-spire-accent font-medium">3</span> 幕进行中
             </p>
-            <div className="flex gap-2 mt-3 flex-wrap">
-              <button className="bg-spire-accent text-spire-bg px-4 py-2 rounded-lg text-sm font-semibold inline-flex items-center gap-2 hover:bg-spire-accent-hover transition-all hover:-translate-y-0.5 hover:shadow-lg hover:shadow-spire-accent/20">
-                <Camera size={16} />
-                截图提问
-              </button>
-              <a href="/cards" className="bg-transparent border border-spire-border text-spire-muted px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2 hover:border-spire-accent hover:text-spire-accent transition-colors">
-                <Search size={16} />
-                查卡牌
-              </a>
-            </div>
           </div>
+          <div className="hidden sm:flex gap-2">
+            <button
+              onClick={() => navigate('/cards')}
+              className="spire-btn-secondary"
+            >
+              <Database size={16} />
+              查卡牌
+            </button>
+          </div>
+        </div>
+
+        {/* 快捷操作 */}
+        <div className="flex gap-3 mt-4 flex-wrap">
+          <button className="spire-btn">
+            <Swords size={16} />
+            截图提问
+          </button>
+          <button
+            onClick={() => navigate('/cards')}
+            className="spire-btn-secondary"
+          >
+            <Database size={16} />
+            卡牌数据库
+          </button>
+          <button
+            onClick={() => navigate('/enemies')}
+            className="spire-btn-secondary"
+          >
+            <ShieldAlert size={16} />
+            敌人图鉴
+          </button>
         </div>
       </div>
 
       {/* 快速统计卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-        {/* BOSS卡片 */}
-        <div className="bg-spire-surface border border-spire-border rounded-xl p-4 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all cursor-pointer">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-red-500/10 flex items-center justify-center text-red-400">
-              <Shield size={20} />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        {quickCards.map((card) => {
+          const Icon = card.icon
+          return (
+            <div
+              key={card.title}
+              onClick={() => navigate(card.path)}
+              className="spire-panel cursor-pointer hover:border-spire-accent/50 transition-colors"
+            >
+              <div className="flex items-start justify-between mb-3">
+                <Icon className={card.color} size={24} />
+                <ChevronRight size={16} className="text-spire-text-dim" />
+              </div>
+              <h3 className="font-semibold text-spire-text">{card.title}</h3>
+              <p className="text-xs text-spire-text-dim mt-1">{card.subtitle}</p>
             </div>
-            <div>
-              <h3 className="font-semibold text-sm">当前BOSS</h3>
-              <p className="text-xs text-spire-muted">数据库已就绪</p>
-            </div>
-          </div>
-          <p className="text-xs text-spire-muted leading-relaxed">
-            敌人数据库包含25个敌人/BOSS，含血量、意图、对策。战斗中可随时查询。
-          </p>
-          <a href="/enemies" className="mt-3 text-xs text-spire-accent hover:text-spire-accent-hover font-medium inline-block">
-            查看敌人数据库 →
-          </a>
-        </div>
-
-        {/* 流派卡片 */}
-        <div className="bg-spire-surface border border-spire-border rounded-xl p-4 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all cursor-pointer">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
-              <Zap size={20} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm">卡牌数据库</h3>
-              <p className="text-xs text-spire-muted">{recentCards.length > 0 ? `${recentCards.length}+ 张卡牌` : '加载中...'}</p>
-            </div>
-          </div>
-          <p className="text-xs text-spire-muted leading-relaxed">
-            完整收录 StS1/StS2 卡牌，支持搜索、筛选、对比。查询卡牌效果、升级前后变化、适用流派。
-          </p>
-          <a href="/cards" className="mt-3 text-xs text-spire-accent hover:text-spire-accent-hover font-medium inline-block">
-            浏览卡牌 →
-          </a>
-        </div>
-
-        {/* 版本卡片 */}
-        <div className="bg-spire-surface border border-spire-border rounded-xl p-4 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/40 transition-all cursor-pointer">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
-              <Trophy size={20} />
-            </div>
-            <div>
-              <h3 className="font-semibold text-sm">遗物数据库</h3>
-              <p className="text-xs text-spire-muted">42个遗物</p>
-            </div>
-          </div>
-          <p className="text-xs text-spire-muted leading-relaxed">
-            查询遗物效果、适用场景、配合卡牌。了解哪些遗物适合当前卡组。
-          </p>
-          <a href="/relics" className="mt-3 text-xs text-spire-accent hover:text-spire-accent-hover font-medium inline-block">
-            查看遗物 →
-          </a>
-        </div>
+          )
+        })}
       </div>
 
-      {/* 对局记录区域 */}
-      <div className="bg-spire-surface border border-spire-border rounded-xl overflow-hidden">
-        <div className="px-5 py-4 border-b border-spire-border flex items-center justify-between">
-          <h3 className="font-semibold text-sm flex items-center gap-2">
-            <BookOpen size={16} className="text-spire-accent" />
-            对局记录
-          </h3>
-          <a href="/sessions" className="text-xs text-spire-muted hover:text-spire-accent">
-            查看全部
-          </a>
+      {/* 最近问答记录 */}
+      <div className="spire-panel">
+        <div className="flex items-center gap-2 mb-4">
+          <ScrollText size={18} className="text-spire-accent" />
+          <h2 className="font-semibold text-spire-text">最近问答记录</h2>
+          <span className="text-xs text-spire-text-dim ml-auto">
+            共 {qaHistory.length} 条
+          </span>
         </div>
 
-        {loading ? (
-          <div className="p-8 text-center text-spire-muted text-sm">
-            <div className="inline-block w-5 h-5 border-2 border-spire-accent border-t-transparent rounded-full animate-spin mb-2" />
-            <p>加载数据中...</p>
-          </div>
-        ) : sessions.length === 0 ? (
-          <div className="p-8 text-center">
-            <p className="text-spire-muted text-sm mb-2">暂无对局记录</p>
-            <p className="text-xs text-spire-muted/60">
-              在AI助手页面上传截图，系统会自动记录对局
-            </p>
+        {qaHistory.length === 0 ? (
+          <div className="text-center py-6 text-spire-text-dim text-sm">
+            <AlertCircle size={24} className="mx-auto mb-2 opacity-40" />
+            <p>暂无问答记录</p>
+            <p className="text-xs mt-1">在右侧AI面板发送问题即可记录</p>
           </div>
         ) : (
-          <div className="divide-y divide-spire-border/50">
-            {sessions.slice(0, 5).map((session: any) => (
-              <div key={session.id} className="px-5 py-4 hover:bg-spire-bg/50 transition-colors cursor-pointer">
-                <div className="flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-spire-bg flex items-center justify-center text-sm flex-shrink-0 border border-spire-border">
-                    🎮
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium">{session.character || '未知角色'}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-spire-bg border border-spire-border text-spire-muted">
-                        进阶 {session.ascension || 0}
-                      </span>
-                    </div>
-                    <p className="text-xs text-spire-muted">
-                      {session.act ? `第 ${session.act} 幕` : ''}
-                      {session.floor ? ` · ${session.floor} 层` : ''}
-                      {session.hp && session.maxHp ? ` · HP ${session.hp}/${session.maxHp}` : ''}
-                    </p>
-                    <div className="flex items-center gap-3 mt-2">
-                      <span className="text-[10px] text-spire-muted">
-                        {session.created_at ? new Date(session.created_at).toLocaleDateString('zh-CN') : ''}
-                      </span>
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded ${
-                        session.status === 'completed'
-                          ? 'bg-green-500/10 text-green-400'
-                          : session.status === 'abandoned'
-                          ? 'bg-red-500/10 text-red-400'
-                          : 'bg-yellow-500/10 text-yellow-400'
-                      }`}>
-                        {session.status === 'completed' ? '已完成' : session.status === 'abandoned' ? '已放弃' : '进行中'}
-                      </span>
-                    </div>
-                  </div>
+          <div className="space-y-3">
+            {qaHistory.map((qa) => (
+              <div
+                key={qa.id}
+                className="bg-spire-bg border border-spire-border rounded-lg p-3"
+              >
+                <div className="flex items-center gap-2 mb-1.5">
+                  <span className="text-xs font-medium text-spire-accent">
+                    {qa.question_type === 'combat_advice' ? '战斗建议' : qa.question_type}
+                  </span>
+                  <span className="text-[10px] text-spire-text-dim">
+                    {new Date(qa.created_at).toLocaleString('zh-CN')}
+                  </span>
                 </div>
+                <p className="text-sm text-spire-text line-clamp-2">
+                  {qa.ai_response}
+                </p>
               </div>
             ))}
           </div>
         )}
-      </div>
-
-      {/* 快捷提示 */}
-      <div className="text-center">
-        <p className="text-xs text-spire-muted/60">
-          💡 提示：游戏时按 <kbd className="px-1.5 py-0.5 rounded bg-spire-surface border border-spire-border text-[10px] font-mono">Win+Shift+S</kbd> 截图，然后 <kbd className="px-1.5 py-0.5 rounded bg-spire-surface border border-spire-border text-[10px] font-mono">Ctrl+V</kbd> 粘贴到右侧AI面板提问
-        </p>
       </div>
     </div>
   )
