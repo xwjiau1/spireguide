@@ -8,6 +8,7 @@ import enemiesRouter from './routes/enemies';
 import relicsRouter from './routes/relics';
 import aiRouter from './routes/ai';
 import sessionsRouter from './routes/sessions';
+import configRouter from './routes/config';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -45,6 +46,7 @@ app.use('/api/enemies', enemiesRouter);
 app.use('/api/relics', relicsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/sessions', sessionsRouter);
+app.use('/api/config', configRouter);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {

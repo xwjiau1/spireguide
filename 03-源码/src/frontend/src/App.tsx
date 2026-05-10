@@ -7,7 +7,8 @@ import {
   Camera,
   BookOpen,
   Menu,
-  X
+  X,
+  Settings,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -16,6 +17,7 @@ import CardsPage from './pages/CardsPage'
 import EnemiesPage from './pages/EnemiesPage'
 import RelicsPage from './pages/RelicsPage'
 import SessionsPage from './pages/SessionsPage'
+import SettingsPage from './pages/SettingsPage'
 
 /**
  * 应用根组件
@@ -31,6 +33,7 @@ function App() {
     { to: '/enemies', icon: Shield, label: '敌人数据库' },
     { to: '/relics', icon: Gem, label: '遗物数据库' },
     { to: '/sessions', icon: Camera, label: '对局记录' },
+    { to: '/settings', icon: Settings, label: '系统设置' },
   ]
 
   return (
@@ -105,6 +108,7 @@ function App() {
             <Route path="/enemies" element={<EnemiesPage />} />
             <Route path="/relics" element={<RelicsPage />} />
             <Route path="/sessions" element={<SessionsPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Routes>
         </div>
       </main>

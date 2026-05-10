@@ -63,7 +63,21 @@ export const aiApi = {
     }),
 }
 
-// 对局记录API
+// 系统配置API
+export const configApi = {
+  getAi: () =>
+    fetchApi<{ data: any }>('/config/ai'),
+  updateAi: (payload: any) =>
+    fetchApi<{ data: any }>('/config/ai', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  testAi: (payload: any) =>
+    fetchApi<{ data: any }>('/config/ai/test', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+}
 export const sessionsApi = {
   list: () =>
     fetchApi<{ data: any[] }>('/sessions'),

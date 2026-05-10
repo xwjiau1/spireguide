@@ -126,7 +126,25 @@ CREATE TABLE IF NOT EXISTS qa_history (
 CREATE INDEX IF NOT EXISTS idx_qa_device ON qa_history(device_id);
 CREATE INDEX IF NOT EXISTS idx_qa_created ON qa_history(created_at);
 
--- 卡牌配合表
+-- 系统配置表：AI设置
+CREATE TABLE IF NOT EXISTS ai_configs (
+    id              INTEGER PRIMARY KEY CHECK (id = 1),  -- 单条记录，id固定为1
+    enabled         INTEGER NOT NULL DEFAULT 0,           -- 0=关闭 1=开启
+    provider        TEXT NOT NULL DEFAULT 'kimi',         -- 'kimi' | 'openai' | 'custom'
+    api_key         TEXT,                                 -- API密钥（加密存储预留）
+    api_url         TEXT,                                 -- 自定义API地址
+    model           TEXT DEFAULT 'kimi-latest',             -- 模型名称
+    vision_model    TEXT DEFAULT 'kimi-latest',             -- 视觉模型名称
+    timeout_ms      INTEGER DEFAULT 30000,                -- 请求超时（毫秒）
+    max_tokens      INTEGER DEFAULT 4096,                 -- 最大token数
+    temperature     REAL DEFAULT 0.7,                     -- 温度参数
+    system_prompt   TEXT,                                 -- 系统提示词
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 初始化默认配置
+INSERT OR IGNORE INTO ai_configs (id, enabled, provider, model, system_prompt)
+VALUES (1, 0, 'kimi', 'kimi-latest', '你是一位杀戮尖塔游戏策略专家。根据玩家提供的游戏截图识别结果，给出具体的出牌建议和策略分析。回答要简洁实用，考虑能量、手牌、敌人和当前血量。');
 CREATE TABLE IF NOT EXISTS card_combos (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
     game_version    TEXT NOT NULL,
