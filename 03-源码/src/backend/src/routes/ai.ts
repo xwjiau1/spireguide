@@ -25,6 +25,21 @@ function getApiBaseUrl(provider: string, customUrl?: string): string {
   }
 }
 
+// 获取问答历史
+router.get('/history', (req, res) => {
+  const { limit = '20', offset = '0' } = req.query;
+
+  const stmt = db.prepare(`
+    SELECT * FROM qa_history
+    ORDER BY created_at DESC
+    LIMIT ? OFFSET ?
+  `);
+
+  const history = stmt.all(parseInt(limit as string), parseInt(offset as string));
+
+  res.json({ success: true, data: history });
+});
+
 // 截图识别 — 优先使用真实Vision API，否则Mock
 router.post('/recognize', async (req, res) => {
   const { image, image_url } = req.body;

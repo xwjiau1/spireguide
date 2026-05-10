@@ -7,16 +7,21 @@ export default {
   theme: {
     extend: {
       colors: {
-        // 杀戮尖塔主题色
+        // 尖塔智囊设计稿颜色（GitHub风格暗色+橙色强调）
         spire: {
-          bg: '#1a1a2e',
-          card: '#16213e',
-          border: '#0f3460',
-          accent: '#e94560',
-          success: '#00c853',
+          bg: '#0d1117',
+          surface: '#161b22',
+          'surface-light': '#1c2128',
+          border: '#30363d',
+          accent: '#ff7b00',
+          'accent-hover': '#ff9933',
+          'accent-dim': '#cc6200',
+          text: '#e6edf3',
+          muted: '#8b949e',
+          success: '#58a6ff',
           warning: '#ffab00',
-          text: '#eaeaea',
-          muted: '#a0a0a0',
+          danger: '#f85149',
+          card: '#21262d',
           ironclad: '#c0392b',
           silent: '#2ecc71',
           defect: '#3498db',
@@ -26,7 +31,7 @@ export default {
         }
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['"Microsoft YaHei"', '"PingFang SC"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
       },
     },
   },
