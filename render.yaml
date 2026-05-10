@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: spireguide
+    env: node
+    buildCommand: cd "03-源码/src/backend" && npm install && cd ../../frontend && npm install && npm run build && cp -r dist ../backend/public 2>/dev/null || true && cd ../backend && npx tsc
+    startCommand: cd "03-源码/src/backend" && node dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+    healthCheckPath: /api/health
+    plan: free
