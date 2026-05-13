@@ -3,24 +3,19 @@ import {
   Routes,
   Route,
   NavLink,
-  useNavigate,
 } from 'react-router-dom'
 import {
   Swords,
   Database,
   ShieldAlert,
-  BookOpen,
-  Clock,
   Settings,
   Gem,
   ScrollText,
-  Upload,
   Send,
   Loader2,
   MessageSquare,
   Image,
   PanelLeft,
-  X,
 } from 'lucide-react'
 
 import HomePage from './pages/HomePage'
@@ -58,7 +53,6 @@ const NAV_EXTRA = [
 ]
 
 export default function App() {
-  const navigate = useNavigate()
   const [mobileNavOpen, setMobileNavOpen] = useState(false)
 
   // AI面板状态

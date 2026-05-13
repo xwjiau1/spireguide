@@ -1,9 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import {
-  Swords,
   Database,
   ShieldAlert,
-  Clock,
   ChevronRight,
   Zap,
   TrendingUp,
