@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import {
   Swords,
   Database,
@@ -10,9 +10,10 @@ import {
   AlertCircle,
   Loader2,
   ScrollText,
+  Image,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { enemiesApi, qaHistoryApi } from '../services/api'
+import { enemiesApi, qaHistoryApi, aiApi } from '../services/api'
 
 /**
  * HomePage.tsx — 首页
@@ -41,6 +42,9 @@ export default function HomePage() {
   const [featuredEnemy, setFeaturedEnemy] = useState<any>(null)
   const [qaHistory, setQaHistory] = useState<QAItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [isRecognizing, setIsRecognizing] = useState(false)
+  const [recognizeResult, setRecognizeResult] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     const load = async () => {
@@ -59,6 +63,54 @@ export default function HomePage() {
       }
     }
     load()
+  }, [])
+
+  // 处理文件选择和截图识别
+  const handleFileSelect = (file: File) => {
+    if (!file.type.startsWith('image/')) return
+    setIsRecognizing(true)
+    setRecognizeResult(null)
+    const reader = new FileReader()
+    reader.onload = async (e) => {
+      const imageData = e.target?.result as string
+      if (!imageData) return
+      try {
+        const res = await aiApi.recognize(imageData)
+        const rec = res.data?.recognized_elements
+        if (rec) {
+          const info = `🎮 识别结果：\n角色：${rec.character || '未知'} | 回合：${rec.turn || '?'} | 能量：${rec.energy || '?'}
+敌人：${rec.enemyName || '未知'} ${rec.enemyHp || ''}
+手牌：${(rec.handCards || []).map((c: any) => `${c.name}(费${c.cost})`).join('、') || '无'}`
+          setRecognizeResult(info)
+        }
+      } catch (err) {
+        setRecognizeResult('❌ 截图识别失败：' + (err as Error).message)
+      } finally {
+        setIsRecognizing(false)
+      }
+    }
+    reader.readAsDataURL(file)
+  }
+
+  const handleScreenshotAsk = () => {
+    fileInputRef.current?.click()
+  }
+
+  // Ctrl+V 粘贴截图支持
+  useEffect(() => {
+    const handler = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items
+      if (!items) return
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].type.startsWith('image/')) {
+          const file = items[i].getAsFile()
+          if (file) handleFileSelect(file)
+          break
+        }
+      }
+    }
+    document.addEventListener('paste', handler)
+    return () => document.removeEventListener('paste', handler)
   }, [])
 
   const quickCards: QuickCard[] = [
@@ -124,9 +176,28 @@ export default function HomePage() {
 
         {/* 快捷操作 */}
         <div className="flex gap-3 mt-4 flex-wrap">
-          <button className="spire-btn">
-            <Swords size={16} />
-            截图提问
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (file) handleFileSelect(file)
+              e.target.value = ''
+            }}
+          />
+          <button
+            onClick={handleScreenshotAsk}
+            disabled={isRecognizing}
+            className="spire-btn"
+          >
+            {isRecognizing ? (
+              <Loader2 size={16} className="animate-spin" />
+            ) : (
+              <Image size={16} />
+            )}
+            {isRecognizing ? '识别中...' : '截图提问'}
           </button>
           <button
             onClick={() => navigate('/cards')}
@@ -143,6 +214,13 @@ export default function HomePage() {
             敌人图鉴
           </button>
         </div>
+
+        {/* 识别结果展示 */}
+        {recognizeResult && (
+          <div className="mt-3 bg-spire-surface border border-spire-accent/30 rounded-lg p-3 text-sm text-spire-text whitespace-pre-wrap">
+            {recognizeResult}
+          </div>
+        )}
       </div>
 
       {/* 快速统计卡片 */}

@@ -24,6 +24,12 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
+// 强制 UTF-8 编码响应头（修复中文乱码）
+app.use((req, res, next) => {
+  res.setHeader('Content-Type', 'application/json; charset=utf-8');
+  next();
+});
+
 // 限流
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟

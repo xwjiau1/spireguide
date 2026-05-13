@@ -170,7 +170,18 @@ CREATE TABLE IF NOT EXISTS archetypes (
     avoid_cards     TEXT,                       -- JSON
     early_game      TEXT,
     mid_game        TEXT,
-    late_game       TEXT
+    late_game       TEXT,
+    difficulty_rating INTEGER DEFAULT 3,        -- 难度评分 1-5
+    win_rate        REAL,                       -- 预估胜率
+    recommended_ascension INTEGER DEFAULT 0,    -- 推荐起始进阶
+    playstyle_tags  TEXT,                       -- JSON ["aggro","combo"]
+    mvp_relics      TEXT,                       -- JSON 核心遗物
+    avoid_relics    TEXT,                       -- JSON 避免遗物
+    key_nodes       TEXT,                       -- 关键节点说明（长文本）
+    advanced_tips   TEXT,                       -- 进阶技巧（长文本）
+    route_preferences TEXT,                     -- JSON 路线偏好
+    data_source     TEXT DEFAULT 'manual',      -- manual|scraped|hybrid
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 卡牌流派关联表
@@ -180,3 +191,31 @@ CREATE TABLE IF NOT EXISTS card_archetype_links (
     role            TEXT NOT NULL,              -- 'core'|'support'|'optional'
     PRIMARY KEY (card_id, archetype_id)
 );
+
+-- 流派尝试记录表
+CREATE TABLE IF NOT EXISTS archetype_attempts (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    archetype_id    INTEGER NOT NULL,
+    device_id       TEXT,                       -- 匿名用户标识
+    character       TEXT NOT NULL,              -- 实际使用的角色
+    seed            TEXT,                       -- 游戏种子
+    ascension       INTEGER DEFAULT 0,          -- 进阶等级
+    outcome         TEXT,                       -- 'win'|'lose'|'abandoned'|'in_progress'
+    final_floor     INTEGER,
+    duration_minutes INTEGER,                   -- 对局时长（分钟）
+    notes           TEXT,                       -- 心得体会（长文本）
+    rating          INTEGER CHECK(rating BETWEEN 1 AND 5), -- 用户评分
+    is_favorite     INTEGER DEFAULT 0,          -- 0|1 是否收藏
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (archetype_id) REFERENCES archetypes(id) ON DELETE CASCADE
+);
+
+-- 流派表索引
+CREATE INDEX IF NOT EXISTS idx_archetypes_character ON archetypes(character);
+CREATE INDEX IF NOT EXISTS idx_archetypes_game ON archetypes(game_version);
+
+-- 尝试记录索引
+CREATE INDEX IF NOT EXISTS idx_attempts_archetype ON archetype_attempts(archetype_id);
+CREATE INDEX IF NOT EXISTS idx_attempts_device ON archetype_attempts(device_id);
+CREATE INDEX IF NOT EXISTS idx_attempts_created ON archetype_attempts(created_at);
