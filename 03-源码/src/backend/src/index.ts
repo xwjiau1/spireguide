@@ -26,8 +26,8 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// 强制 UTF-8 编码响应头（修复中文乱码）
-app.use((req, res, next) => {
+// 强制 UTF-8 编码响应头（修复中文乱码）——仅对 API 路由生效
+app.use('/api', (req, res, next) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   next();
 });
@@ -37,6 +37,8 @@ const limiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15分钟
   max: 100, // 每IP最多100次
   message: { success: false, error: '请求过于频繁，请稍后再试' },
+  // Cloudflare隧道传递X-Forwarded-For，需要信任代理
+  validate: { xForwardedForHeader: false },
 });
 app.use('/api/', limiter);
 
@@ -45,6 +47,8 @@ const aiLimiter = rateLimit({
   windowMs: 60 * 60 * 1000, // 1小时
   max: 30, // 每小时30次
   message: { success: false, error: 'AI问答次数已达上限，请稍后再试' },
+  // Cloudflare隧道传递X-Forwarded-For，需要信任代理
+  validate: { xForwardedForHeader: false },
 });
 app.use('/api/ai/', aiLimiter);
 
