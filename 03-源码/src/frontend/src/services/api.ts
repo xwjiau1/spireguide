@@ -19,6 +19,36 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
   return data
 }
 
+// 流派API
+export const archetypesApi = {
+  list: (params?: Record<string, string>) =>
+    fetchApi<{ data: any[] }>(`/archetypes?${new URLSearchParams(params).toString()}`),
+  getById: (id: string) =>
+    fetchApi<{ data: any }>(`/archetypes/${id}`),
+  getAttempts: (id: string, deviceId?: string) =>
+    fetchApi<{ data: any[] }>(`/archetypes/${id}/attempts${deviceId ? '?device_id=' + encodeURIComponent(deviceId) : ''}`),
+}
+
+// 尝试记录API
+export const attemptsApi = {
+  list: (params?: Record<string, string>) =>
+    fetchApi<{ data: any[] }>(`/attempts?${new URLSearchParams(params).toString()}`),
+  create: (payload: any) =>
+    fetchApi<{ data: any }>('/attempts', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  update: (id: string, payload: any) =>
+    fetchApi<{ data: any }>(`/attempts/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+  delete: (id: string) =>
+    fetchApi<{ data: any }>(`/attempts/${id}`, {
+      method: 'DELETE',
+    }),
+}
+
 // 卡牌API
 export const cardsApi = {
   list: (params?: Record<string, string>) =>

@@ -314,7 +314,7 @@ export default function App() {
             <Swords className="text-spire-accent" size={24} />
             <div>
               <h1 className="font-bold text-spire-accent leading-tight">尖塔智囊</h1>
-              <p className="text-[10px] text-spire-text-dim -mt-0.5">SpireGuide v0.1.1</p>
+              <p className="text-[10px] text-spire-text-dim -mt-0.5">SpireGuide v0.2.0</p>
             </div>
           </div>
 
@@ -370,6 +370,8 @@ export default function App() {
               <span className="font-semibold text-spire-text text-sm">AI策略助手</span>
               {isAiLoading && <Loader2 size={14} className="animate-spin text-spire-accent ml-auto" />}
             </div>
+
+            {/* 流派选择器 */}
             <div className="relative">
               <button
                 onClick={() => setShowArchetypeDropdown(!showArchetypeDropdown)}
@@ -377,24 +379,29 @@ export default function App() {
               >
                 <div className="flex items-center gap-1.5">
                   <Flame size={12} className={selectedArchetype ? 'text-spire-accent' : 'text-spire-text-dim'} />
-                  <span className={selectedArchetype ? 'text-spire-accent' : 'text-spire-text-dim'}>
+                  <span className={selectedArchetype ? 'text-spire-accent' : 'text-spire-text-dim'}">
                     {selectedArchetype
-                      ? (archetypes.find((a) => a.id === selectedArchetype) && archetypes.find((a) => a.id === selectedArchetype).name_cn) || '已选流派'
+                      ? archetypes.find((a) => a.id === selectedArchetype)?.name_cn || '已选流派'
                       : '选择流派上下文（可选）'}
                   </span>
                 </div>
                 <ChevronDown size={12} className="text-spire-text-dim" />
               </button>
+
+              {/* 下拉选项 */}
               {showArchetypeDropdown && (
                 <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowArchetypeDropdown(false)} />
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowArchetypeDropdown(false)}
+                  />
                   <div className="absolute top-full left-0 right-0 mt-1 bg-spire-bg border border-spire-border rounded-lg shadow-lg z-50 max-h-48 overflow-y-auto">
                     <button
                       onClick={() => { setSelectedArchetype(null); setShowArchetypeDropdown(false) }}
-                      className={
-                        'w-full text-left px-3 py-2 text-xs transition-colors '
-                        + (!selectedArchetype ? 'text-spire-accent bg-spire-accent/10' : 'text-spire-text-dim hover:bg-spire-surface')
-                      }
+                      className={`
+                        w-full text-left px-3 py-2 text-xs transition-colors
+                        ${!selectedArchetype ? 'text-spire-accent bg-spire-accent/10' : 'text-spire-text-dim hover:bg-spire-surface'}
+                      `}
                     >
                       不指定流派
                     </button>
@@ -402,10 +409,10 @@ export default function App() {
                       <button
                         key={a.id}
                         onClick={() => { setSelectedArchetype(a.id); setShowArchetypeDropdown(false) }}
-                        className={
-                          'w-full text-left px-3 py-2 text-xs transition-colors '
-                          + (selectedArchetype === a.id ? 'text-spire-accent bg-spire-accent/10' : 'text-spire-text-dim hover:bg-spire-surface')
-                        }
+                        className={`
+                          w-full text-left px-3 py-2 text-xs transition-colors
+                          ${selectedArchetype === a.id ? 'text-spire-accent bg-spire-accent/10' : 'text-spire-text-dim hover:bg-spire-surface'}
+                        `}
                       >
                         {a.name_cn || a.name_en}
                       </button>

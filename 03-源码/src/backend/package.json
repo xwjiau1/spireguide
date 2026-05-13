@@ -1,6 +1,6 @@
 {
   "name": "spireguide-backend",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "杀戮尖塔攻略平台后端",
   "main": "dist/index.js",
   "scripts": {

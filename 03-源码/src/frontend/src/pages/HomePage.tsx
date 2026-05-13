@@ -9,9 +9,10 @@ import {
   Loader2,
   ScrollText,
   Image,
+  Flame,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { enemiesApi, qaHistoryApi, aiApi } from '../services/api'
+import { enemiesApi, qaHistoryApi, aiApi, archetypesApi } from '../services/api'
 
 /**
  * HomePage.tsx — 首页
@@ -44,18 +45,22 @@ export default function HomePage() {
   const [recognizeResult, setRecognizeResult] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // 流派选择器状态
+  const [archetypes, setArchetypes] = useState<any[]>([])
+
   useEffect(() => {
     const load = async () => {
       try {
-        const [enemyRes, qaRes] = await Promise.all([
+        const [enemyRes, qaRes, archRes] = await Promise.all([
           enemiesApi.list().catch(() => ({ data: [] })),
           qaHistoryApi.list({ limit: 5 }).catch(() => ({ data: [] })),
+          archetypesApi.list({ game_version: 'sts1' }).catch(() => ({ data: [] })),
         ])
         const enemies = enemyRes.data || []
-        // 取第一个BOSS类型敌人或第一个敌人作为"当前关注"
         const boss = enemies.find((e: any) => e.type === 'boss') || enemies[0]
         setFeaturedEnemy(boss)
         setQaHistory(qaRes.data || [])
+        setArchetypes(archRes.data || [])
       } finally {
         setLoading(false)
       }
@@ -171,6 +176,22 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        {/* 流派上下文提示 + 快捷入口 */}
+        {archetypes.length > 0 && (
+          <div className="mt-3 flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-1.5 text-xs text-spire-text-dim">
+              <Flame size={12} className="text-spire-accent" />
+              <span>右侧AI面板可选择流派上下文，获得更精准的策略建议</span>
+            </div>
+            <button
+              onClick={() => navigate('/archetypes')}
+              className="text-xs text-spire-accent hover:underline"
+            >
+              浏览流派 →
+            </button>
+          </div>
+        )}
 
         {/* 快捷操作 */}
         <div className="flex gap-3 mt-4 flex-wrap">

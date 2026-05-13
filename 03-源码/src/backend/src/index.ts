@@ -9,6 +9,8 @@ import relicsRouter from './routes/relics';
 import aiRouter from './routes/ai';
 import sessionsRouter from './routes/sessions';
 import configRouter from './routes/config';
+import archetypesRouter from './routes/archetypes';
+import attemptsRouter from './routes/attempts';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler';
 
 /**
@@ -53,10 +55,12 @@ app.use('/api/relics', relicsRouter);
 app.use('/api/ai', aiRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/config', configRouter);
+app.use('/api/archetypes', archetypesRouter);
+app.use('/api/attempts', attemptsRouter);
 
 // 健康检查
 app.get('/api/health', (_req, res) => {
-  res.json({ success: true, data: { status: 'ok', version: '0.1.0' } });
+  res.json({ success: true, data: { status: 'ok', version: '0.2.0' } });
 });
 
 // 静态文件（前端构建产物）

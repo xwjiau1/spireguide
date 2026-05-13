@@ -5,9 +5,56 @@ import db from '../database/db';
  * AI问答API路由
  * 核心功能：截图识别 + 策略生成
  * 支持真实AI调用（配置开启时）和Mock回退
+ * v0.2.0 新增：错误分类降级、流派上下文注入、免责声明
  */
 
 const router = Router();
+
+// ——— 错误分类枚举与降级 ———
+enum AiErrorType {
+  NETWORK_ERROR = 'network_error',
+  API_KEY_INVALID = 'api_key_invalid',
+  RATE_LIMITED = 'rate_limited',
+  TIMEOUT = 'timeout',
+  UNKNOWN = 'unknown',
+}
+
+interface ClassifiedError {
+  type: AiErrorType;
+  message: string;
+  recoverable: boolean;
+}
+
+/**
+ * 对API调用异常进行分类，用于前端展示和自动恢复判断
+ */
+function classifyError(err: any): ClassifiedError {
+  const msg = err?.message || String(err);
+
+  // 401 Unauthorized → API密钥无效
+  if (msg.includes('401') || msg.includes('Unauthorized') || msg.includes('API密钥')) {
+    return { type: AiErrorType.API_KEY_INVALID, message: 'API密钥无效或已过期，请检查设置', recoverable: false };
+  }
+
+  // 429 Too Many Requests → 速率限制
+  if (msg.includes('429') || msg.includes('rate limit') || msg.includes('too many requests')) {
+    return { type: AiErrorType.RATE_LIMITED, message: '请求过于频繁，请稍后再试', recoverable: true };
+  }
+
+  // fetch failed / connection error → 网络问题
+  if (msg.includes('fetch failed') || msg.includes('ECONNREFUSED') || msg.includes('ENOTFOUND') || msg.includes('network') || msg.includes('timeout')) {
+    // 注意：timeout 和 network 有重叠，这里单独处理显式 timeout
+    if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) {
+      return { type: AiErrorType.TIMEOUT, message: '请求超时，网络连接不稳定', recoverable: true };
+    }
+    return { type: AiErrorType.NETWORK_ERROR, message: '网络连接失败，请检查网络', recoverable: true };
+  }
+
+  return { type: AiErrorType.UNKNOWN, message: '未知错误：' + msg, recoverable: true };
+}
+
+// 免责声明
+const DISCLAIMER = '\n\n---\n⚠️ 免责声明：以上建议由 AI 生成，仅供参考。杀戮尖塔是一款高度依赖随机性的Roguelike游戏，实际对局请结合当前牌组、遗物和敌人状态综合判断。';
 
 // 辅助：读取AI配置
 function getAiConfig() {
@@ -23,6 +70,26 @@ function getApiBaseUrl(provider: string, customUrl?: string): string {
     case 'openai': return 'https://api.openai.com/v1';
     default: return 'https://api.moonshot.cn/v1';
   }
+}
+
+// 辅助：查询流派攻略（用于注入提示词上下文）
+function getArchetypeContext(archetypeId: number): any | null {
+  const stmt = db.prepare('SELECT * FROM archetypes WHERE id = ?');
+  const archetype = stmt.get(archetypeId) as any;
+  if (!archetype) return null;
+
+  // 解析JSON字段
+  const fieldsToParse = ['core_cards', 'support_cards', 'key_relics', 'avoid_cards', 'playstyle_tags', 'mvp_relics', 'avoid_relics', 'route_preferences'];
+  for (const field of fieldsToParse) {
+    if (archetype[field] && typeof archetype[field] === 'string') {
+      try {
+        archetype[field] = JSON.parse(archetype[field]);
+      } catch {
+        archetype[field] = [];
+      }
+    }
+  }
+  return archetype;
 }
 
 // 获取问答历史
@@ -179,6 +246,7 @@ router.post('/strategy', async (req, res) => {
     gold,
     screenshot_id,
     confirmed_elements,
+    archetype_id, // v0.2.0 新增：流派上下文
   } = req.body;
 
   const hasDetailedParams = question && gameVersion && character;
@@ -223,6 +291,12 @@ router.post('/strategy', async (req, res) => {
   );
   const enemyData = enemyStmt.get(effectiveGameVersion, effectiveEnemyName, effectiveEnemyName);
 
+  // v0.2.0 新增：查询流派上下文
+  let archetypeContext = null;
+  if (archetype_id) {
+    archetypeContext = getArchetypeContext(parseInt(archetype_id));
+  }
+
   const config = getAiConfig();
   const startTime = Date.now();
 
@@ -247,6 +321,7 @@ router.post('/strategy', async (req, res) => {
         question: effectiveQuestion,
         enemyData,
         gameVersion: effectiveGameVersion,
+        archetypeContext,
       });
 
       const response = await fetch(`${baseUrl}/chat/completions`, {
@@ -271,7 +346,10 @@ router.post('/strategy', async (req, res) => {
       }
 
       const data = await response.json() as any;
-      const answer = data.choices?.[0]?.message?.content || 'AI未返回有效回答';
+      let answer = data.choices?.[0]?.message?.content || 'AI未返回有效回答';
+      // v0.2.0 新增：追加免责声明
+      answer += DISCLAIMER;
+
       const responseTimeMs = Date.now() - startTime;
       const tokensUsed = data.usage?.total_tokens || 0;
 
@@ -302,15 +380,103 @@ router.post('/strategy', async (req, res) => {
         },
       });
     } catch (err) {
-      console.warn('[AI] Chat API调用失败，降级到Mock:', (err as Error).message);
+      const classified = classifyError(err);
+      console.warn(`[AI] Chat API调用失败 [${classified.type}]，降级到Mock:`, classified.message);
+
+      // v0.2.0 新增：降级时返回带 _fallback=true 的 Mock 结果
+      return res.json({
+        success: true,
+        data: buildMockStrategy({
+          effectiveCharacter,
+          effectiveTurn,
+          effectiveEnergy,
+          enhancedCards,
+          effectiveEnemyName,
+          effectiveEnemyHp,
+          effectivePlayerHp,
+          effectiveGold,
+          effectiveQuestion,
+          enemyData,
+          archetypeContext,
+        }),
+        _fallback: true,
+        _fallback_reason: classified.type,
+        _fallback_message: classified.message,
+      });
     }
   }
 
-  // Mock回退
+  // Mock回退（未配置AI时）
+  const mockData = buildMockStrategy({
+    effectiveCharacter,
+    effectiveTurn,
+    effectiveEnergy,
+    enhancedCards,
+    effectiveEnemyName,
+    effectiveEnemyHp,
+    effectivePlayerHp,
+    effectiveGold,
+    effectiveQuestion,
+    enemyData,
+    archetypeContext,
+  });
+
+  const responseTimeMs = Date.now() - startTime;
+
+  const qaStmt = db.prepare(`
+    INSERT INTO qa_history (device_id, question_type, question_text, ai_response, ai_model, tokens_used, response_time_ms)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  qaStmt.run(
+    req.body.device_id || req.headers['x-device-id'] || null,
+    'combat_advice',
+    effectiveQuestion,
+    mockData.answer,
+    'kimi-mock',
+    0,
+    responseTimeMs
+  );
+
+  res.json({
+    success: true,
+    data: mockData,
+  });
+});
+
+/**
+ * 构建Mock策略数据（用于降级或未配置AI时）
+ * v0.2.0 新增：支持流派上下文注入
+ */
+function buildMockStrategy(params: any) {
+  const {
+    effectiveCharacter, effectiveTurn, effectiveEnergy,
+    enhancedCards, effectiveEnemyName, effectiveEnemyHp,
+    effectivePlayerHp, effectiveGold, effectiveQuestion,
+    enemyData, archetypeContext,
+  } = params;
+
   let answer = `【基于识别结果的策略建议】\n\n`;
   answer += `当前状态：${effectiveCharacter} 第${effectiveTurn}回合，能量${effectiveEnergy}\n`;
   answer += `手牌：${enhancedCards.map((c: any) => `${c.name}(费${c.cost})`).join('、')}\n`;
   answer += `敌人：${effectiveEnemyName || '未知'} ${effectiveEnemyHp || ''}\n\n`;
+
+  // 如果存在流派上下文，注入流派攻略摘要
+  if (archetypeContext) {
+    answer += `【流派：${archetypeContext.name_cn}】\n`;
+    if (archetypeContext.description) {
+      answer += `${archetypeContext.description}\n`;
+    }
+    if (Array.isArray(archetypeContext.playstyle_tags) && archetypeContext.playstyle_tags.length > 0) {
+      answer += `标签：${archetypeContext.playstyle_tags.join('、')}\n`;
+    }
+    if (archetypeContext.early_game) {
+      answer += `早期策略：${archetypeContext.early_game.substring(0, 200)}${archetypeContext.early_game.length > 200 ? '...' : ''}\n`;
+    }
+    if (archetypeContext.key_nodes) {
+      answer += `关键节点：${archetypeContext.key_nodes.substring(0, 200)}${archetypeContext.key_nodes.length > 200 ? '...' : ''}\n`;
+    }
+    answer += `\n`;
+  }
 
   if (enhancedCards.length > 0) {
     answer += `【出牌建议】\n`;
@@ -337,42 +503,31 @@ router.post('/strategy', async (req, res) => {
 
   answer += `\n【仅供参考，请结合实际判断】\n`;
   answer += `如果识别结果有误，请修正后再获取策略。\n\n`;
-  answer += `提示：当前使用模拟策略。在「系统设置」中配置AI API密钥后，可获得更精准的策略建议。`;
 
-  const responseTimeMs = Date.now() - startTime;
+  if (!archetypeContext) {
+    answer += `提示：当前使用模拟策略。在「系统设置」中配置AI API密钥后，可获得更精准的策略建议。`;
+  } else {
+    answer += `提示：当前使用模拟策略（已结合${archetypeContext.name_cn}流派攻略）。配置真实AI后策略会更精准。`;
+  }
 
-  const qaStmt = db.prepare(`
-    INSERT INTO qa_history (device_id, question_type, question_text, ai_response, ai_model, tokens_used, response_time_ms)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `);
-  qaStmt.run(
-    req.body.device_id || req.headers['x-device-id'] || null,
-    'combat_advice',
-    effectiveQuestion,
+  answer += DISCLAIMER;
+
+  return {
+    strategy_text: answer,
     answer,
-    'kimi-mock',
-    0,
-    responseTimeMs
-  );
-
-  res.json({
-    success: true,
-    data: {
-      strategy_text: answer,
-      answer,
-      model: 'kimi-mock',
-      tokensUsed: 0,
-      responseTimeMs,
-      source: 'mock',
-    },
-  });
-});
+    model: 'kimi-mock',
+    tokensUsed: 0,
+    responseTimeMs: Date.now(),
+    source: 'mock',
+  };
+}
 
 // 辅助：构建策略提示词
 function buildStrategyPrompt(params: any): string {
   const {
     character, turn, energy, handCards, enemyName, enemyHp,
     enemyIntent, playerHp, gold, question, enemyData, gameVersion,
+    archetypeContext, // v0.2.0 新增
   } = params;
 
   let prompt = `我正在玩杀戮尖塔${gameVersion === 'sts2' ? '2' : ''}，需要策略建议。\n\n`;
@@ -382,6 +537,39 @@ function buildStrategyPrompt(params: any): string {
   prompt += `- 能量：${energy}\n`;
   prompt += `- 玩家血量：${playerHp}\n`;
   prompt += `- 金币：${gold}\n\n`;
+
+  // v0.2.0 新增：流派上下文注入
+  if (archetypeContext) {
+    prompt += `【流派攻略参考：${archetypeContext.name_cn}】\n`;
+    if (archetypeContext.description) {
+      prompt += `- 简介：${archetypeContext.description}\n`;
+    }
+    if (Array.isArray(archetypeContext.core_cards) && archetypeContext.core_cards.length > 0) {
+      prompt += `- 核心卡牌：${archetypeContext.core_cards.join('、')}\n`;
+    }
+    if (Array.isArray(archetypeContext.playstyle_tags) && archetypeContext.playstyle_tags.length > 0) {
+      prompt += `- 玩法标签：${archetypeContext.playstyle_tags.join('、')}\n`;
+    }
+    if (archetypeContext.early_game) {
+      prompt += `- 早期策略：${archetypeContext.early_game}\n`;
+    }
+    if (archetypeContext.mid_game) {
+      prompt += `- 中期策略：${archetypeContext.mid_game}\n`;
+    }
+    if (archetypeContext.late_game) {
+      prompt += `- 后期策略：${archetypeContext.late_game}\n`;
+    }
+    if (archetypeContext.key_nodes) {
+      prompt += `- 关键节点：${archetypeContext.key_nodes}\n`;
+    }
+    if (archetypeContext.advanced_tips) {
+      prompt += `- 进阶技巧：${archetypeContext.advanced_tips}\n`;
+    }
+    if (archetypeContext.route_preferences && typeof archetypeContext.route_preferences === 'object') {
+      prompt += `- 路线偏好：${JSON.stringify(archetypeContext.route_preferences)}\n`;
+    }
+    prompt += `\n请结合以上流派攻略，给出针对性的出牌建议。\n\n`;
+  }
 
   prompt += `【手牌】\n`;
   handCards.forEach((card: any, i: number) => {

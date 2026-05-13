@@ -1,0 +1,424 @@
+/**
+ * 流派种子数据灌入脚本
+ * 将24条流派数据从 archetypes.ts 映射插入数据库
+ */
+
+const Database = require('better-sqlite3');
+const db = new Database('data/spireguide.db');
+
+// 导入种子数据（用 require 读取编译后的 JS，这里直接用内联数据）
+// 由于 archetypes.ts 是 TS 文件，我们用 fs 读取后 eval 其 exports
+const fs = require('fs');
+const path = require('path');
+
+// 用 ts-node 编译执行太复杂，直接内联24条数据（从 archetypes.ts 复制）
+const archetypeSeeds = [
+  {
+    game_version: 'sts1', character: 'ironclad', name_cn: '力量战', name_en: 'Strength Ironclad',
+    description: '通过积累力量Buff，配合重击类卡牌打出爆发伤害。核心思路是"叠力量→重击收割"。',
+    core_cards: ['Flex', 'Limit Break', 'Heavy Blade', 'Inflame', 'Demon Form'],
+    support_cards: ['Spot Weakness', 'Twin Strike', 'Sword Boomerang', 'Whirlwind'],
+    key_relics: ['Brimstone', 'Mutagenic Strength', 'Red Skull', 'Paper Phrog'],
+    avoid_cards: ['Perfected Strike', 'Clothesline'],
+    early_game: '优先抓取Inflame、Spot Weakness等叠力量牌。遇到Flex可抓，但注意只有1回合。保留攻击牌清理小兵。',
+    mid_game: '寻找Limit Break和Heavy Blade。Limit Break能将力量翻倍，是核心发动机。如果有Demon Form，可以转型慢速力量成长。',
+    late_game: '确保有2-3张重击牌（Heavy Blade/Whirlwind）。力量叠到20+后，一张Heavy Blade可秒杀精英。注意保留防御牌应对高伤敌人。',
+    difficulty_rating: 2, win_rate: 0.45, recommended_ascension: 0,
+    playstyle_tags: ['aggro', 'scaling', 'strength'],
+    mvp_relics: ['Brimstone', 'Mutagenic Strength'], avoid_relics: ['Snecko Eye', 'Runic Dome'],
+    key_nodes: '第一幕BOSS：优先拿能量遗物（Hollow Key/Cursed Key）或增伤遗物。第二幕：小心Book of Stabbing，确保有AOE。第三幕：Donu&Deca需要高爆发，Time Eater需要控制每回合出牌数量。',
+    advanced_tips: '进阶17+时，敌人伤害大幅提升，不能纯叠力量忽略防御。考虑混入Barricade+Body Slam的防御体系作为副轴。面对Heart时，力量战爆发高但需要注意Corrupted Blood的回复机制。',
+    route_preferences: { elite: '高优先级', shop: '中优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'ironclad', name_cn: '屏障战', name_en: 'Barricade Ironclad',
+    description: '通过Barricade保留格挡，配合Body Slam将格挡转化为伤害。攻守兼备，成型后极其稳健。',
+    core_cards: ['Barricade', 'Body Slam', 'Entrench', 'Metallicize', 'Impervious'],
+    support_cards: ['Shrug It Off', 'True Grit', 'Flame Barrier', 'Power Through'],
+    key_relics: ['Cloak Clasp', 'Calipers', 'Thread and Needle', 'Orichalcum'],
+    avoid_cards: ['Rampage', 'Perfected Strike'],
+    early_game: '优先抓Shrug It Off、True Grit等过牌+防御牌。遇到Metallicize可抓（每回合自动叠甲）。不要过早抓Barricade（费用太高）。',
+    mid_game: '寻找Barricade和Body Slam。Barricade是核心（保留格挡），Body Slam将格挡转伤害。Entrench能翻倍格挡，配合起来很强。',
+    late_game: '确保有过牌循环（Shrug It Off+True Grit）。格挡叠到50+后，一张Body Slam打50+伤害。面对多段攻击敌人（如Book of Stabbing）要算好格挡量。',
+    difficulty_rating: 3, win_rate: 0.40, recommended_ascension: 3,
+    playstyle_tags: ['defensive', 'scaling', 'control'],
+    mvp_relics: ['Cloak Clasp', 'Calipers'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '第二幕Shape类敌人（如Snake Plant）会削弱，需要快速击杀或保留足够格挡。第三幕Reptomancer的小刀会快速消耗格挡，优先击杀本体。',
+    advanced_tips: '进阶17+时，小心Blade Dance等多次攻击，格挡会被快速消耗。配合Juggernaut（每获得格挡造成5伤害）可以转攻为守。面对Time Eater时，每回合尽量少出牌，依靠自动叠甲（Metallicize+Orichalcum）生存。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'ironclad', name_cn: '腐化战', name_en: 'Corruption Ironclad',
+    description: '通过Corruption让所有技能牌变为0费并消耗，配合Feel No Pain和Dark Embrace实现过牌+防御循环。',
+    core_cards: ['Corruption', 'Feel No Pain', 'Dark Embrace', 'True Grit', 'Impervious'],
+    support_cards: ['Shrug It Off', 'Second Wind', 'Burning Pact', 'Exhume'],
+    key_relics: ['Dead Branch', 'Charon\'s Ashes', 'Snecko Eye', 'Tungsten Rod'],
+    avoid_cards: ['Demon Form', 'Barricade'],
+    early_game: '不要过早抓Corruption！先建立防御基础（Shrug It Off、True Grit）。遇到Feel No Pain可抓。',
+    mid_game: '拿到Corruption后立刻抓Dark Embrace和Feel No Pain。技能变0费+消耗触发过牌+防御，形成强大循环。',
+    late_game: '确保有足够技能牌（8张+）支撑循环。配合Dead Branch可以不断生成新牌。注意BOSS战中牌库抽空后的疲劳伤害。',
+    difficulty_rating: 4, win_rate: 0.35, recommended_ascension: 7,
+    playstyle_tags: ['combo', 'exhaust', 'high_risk'],
+    mvp_relics: ['Dead Branch', 'Charon\'s Ashes'], avoid_relics: ['Runic Dome', 'Ectoplasm'],
+    key_nodes: '拿到Corruption后，Rest Site优先升级Corruption或关键技能牌。第二幕BOSS Awakened One会因为你消耗牌而成长（每消耗一张+2力量），需要快速击杀。',
+    advanced_tips: '进阶20时，Corruption战是最强流派之一。Dead Branch+Corruption组合被称为"无限生成"。如果拿到Tungsten Rod，配合True Grit+Feel No Pain可以几乎无伤。面对Heart时，注意安排Exhume回收关键牌。',
+    route_preferences: { elite: '高优先级', shop: '高优先级', event: '高优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'ironclad', name_cn: '完美打击战', name_en: 'Perfected Strike Ironclad',
+    description: '围绕Perfected Strike构建，尽量多抓名字含"Strike"的牌，通过数量堆叠伤害。简单直接，新手友好。',
+    core_cards: ['Perfected Strike', 'Twin Strike', 'Wild Strike', 'Pommel Strike', 'Thunderclap'],
+    support_cards: ['Shrug It Off', 'Battle Trance', 'Flex', 'Heavy Blade'],
+    key_relics: ['Strike Dummy', 'Velvet Choker', 'Bag of Preparation'],
+    avoid_cards: ['Barricade', 'Demon Form'],
+    early_game: '开局送的4张Strike+Perfected Strike就是核心。优先移除Defend之外的牌。遇到任何Strike牌都抓。',
+    mid_game: '保持牌库精简（15张左右），其中Strike牌占50%+。Pommel Strike和Wild Strike都很好。遇到Thunderclap可抓（AOE+Strike标签）。',
+    late_game: '牌库中应有10张+Strike牌。Perfected Strike基础伤害20+，升级后更高。配合Flex或力量遗物可以进一步提升。',
+    difficulty_rating: 1, win_rate: 0.50, recommended_ascension: 0,
+    playstyle_tags: ['simple', 'aggro', 'beginner_friendly'],
+    mvp_relics: ['Strike Dummy', 'Bag of Preparation'], avoid_relics: ['Snecko Eye', 'Runic Dome'],
+    key_nodes: '第一幕尽可能多打精英拿遗物。不要过多抓非Strike牌稀释牌库。Rest Site优先移除非Strike牌。',
+    advanced_tips: '进阶7+时，敌人血量增加，单纯Strike数量可能不够。考虑混入2-3张AOE应对多敌场面。面对Heart时，Strike战爆发高但缺乏防御，需要1-2张Impervious或Feel No Pain应急。',
+    route_preferences: { elite: '高优先级', shop: '中优先级', event: '低优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'silent', name_cn: '毒猎', name_en: 'Poison Silent',
+    description: '通过不断叠加中毒层数，让敌人在回合结束时受到巨额伤害。Catalyst可将中毒翻倍甚至三倍。',
+    core_cards: ['Catalyst', 'Deadly Poison', 'Poisoned Stab', 'Bouncing Flask', 'Envenom'],
+    support_cards: ['Noxious Fumes', 'Corpse Explosion', 'Crippling Poison', 'Burst'],
+    key_relics: ['Snecko Skull', 'The Specimen', 'Twisted Funnel', 'Ninja Scroll'],
+    avoid_cards: ['Infinite Blades', 'Accuracy'],
+    early_game: '优先抓Deadly Poison和Poisoned Stab。遇到Catalyst必须抓（核心发动机）。Noxious Fumes也是优质开局。',
+    mid_game: '寻找Catalyst（如果没有）。Corpse Explosion可以毒杀一个敌人时波及全场，非常强力。Burst+Catalyst组合可以一回合将毒翻6倍。',
+    late_game: '确保有2-3张Catalyst和持续叠毒手段。面对高血量BOSS（如Time Eater、Donu&Deca），需要提前3-4回合开始叠毒。',
+    difficulty_rating: 2, win_rate: 0.42, recommended_ascension: 0,
+    playstyle_tags: ['poison', 'scaling', 'control'],
+    mvp_relics: ['Snecko Skull', 'The Specimen'], avoid_relics: ['Runic Dome', 'Ectoplasm'],
+    key_nodes: '第一幕BOSS：Hexaghost行动模式固定，可以算好伤害。Slime Boss分裂后中毒层数会分到两个身上，不要过早打Catalyst。',
+    advanced_tips: '进阶17+时，敌人伤害高，毒猎需要一定防御。考虑混入Malaise（降低敌人力量）或Wraith Form（3回合无敌）作为应急。Catalyst的升级效果是从翻倍变三倍，优先升级。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'silent', name_cn: '刀猎', name_en: 'Shiv Silent',
+    description: '通过不断生成和打出小刀（Shiv），配合Accuracy和After Image实现高频率输出+防御。',
+    core_cards: ['Blade Dance', 'Cloak and Dagger', 'Accuracy', 'After Image', 'Infinite Blades'],
+    support_cards: ['Backstab', 'Dagger Throw', 'Finisher', 'Storm of Steel', 'Alchemize'],
+    key_relics: ['Shuriken', 'Kunai', 'Ornamental Fan', 'Pen Nib', 'Ninja Scroll'],
+    avoid_cards: ['Catalyst', 'Corpse Explosion'],
+    early_game: '优先抓Blade Dance和Cloak and Dagger。Infinite Blades可以每回合自动生成小刀，降低费用压力。',
+    mid_game: '寻找Accuracy（小刀伤害+4）和After Image（每打出一张牌获得1格挡）。Shuriken和Kunai遗物配合高频出牌极其强力。',
+    late_game: '一回合可以打出8-12张小刀，配合Accuracy+Shuriken/Kunai遗物可以同时叠力量/敏捷。Storm of Steel可以将手牌全部转小刀，爆发极高。',
+    difficulty_rating: 2, win_rate: 0.43, recommended_ascension: 0,
+    playstyle_tags: ['aggro', 'combo', 'high_frequency'],
+    mvp_relics: ['Shuriken', 'Kunai', 'Ornamental Fan'], avoid_relics: ['Runic Dome', 'Snecko Eye'],
+    key_nodes: '刀猎怕Time Eater（限制出牌12张）。面对Time Eater时，控制每回合出牌数量，保留高费高伤牌作为收尾。Donu&Deca则需要快速爆发击杀一个。',
+    advanced_tips: '进阶17+时，小心Spire Spear和Spire Shield的多段攻击。After Image+Wraith Form可以完美应对。Pen Nib遗物（每10张牌下一张双倍）配合刀猎频率极高。',
+    route_preferences: { elite: '高优先级', shop: '高优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'silent', name_cn: '弃牌猎', name_en: 'Discard Silent',
+    description: '通过不断弃牌触发效果（Tactician+Reflex回费过牌），配合Eviscerate和Doom and Gloom打出高伤害。',
+    core_cards: ['Tactician', 'Reflex', 'Eviscerate', 'Doom and Gloom', 'Concentrate'],
+    support_cards: ['Prepared', 'Acrobatics', 'Calculated Gamble', 'Tools of the Trade', 'Adrenaline'],
+    key_relics: ['Tough Bandages', 'Runic Pyramid', 'Gambling Chip', 'Tiny House'],
+    avoid_cards: ['Footwork', 'Dodge and Roll'],
+    early_game: '优先抓Prepared和Acrobatics。遇到Tactician/Reflex必抓。弃牌体系需要一定牌库厚度支撑（20张+）。',
+    mid_game: '寻找Eviscerate（弃牌越多伤害越高）和Concentrate。Adrenaline是神牌（2费过2+额外2费）。Tough Bandages遗物配合弃牌获得格挡。',
+    late_game: '一回合可以弃5-8张牌，触发多次Tactician/Reflex。Eviscerate伤害轻松达到30+。配合Grand Finale（牌库为空时打50伤害）有奇效。',
+    difficulty_rating: 4, win_rate: 0.30, recommended_ascension: 7,
+    playstyle_tags: ['combo', 'discard', 'high_skill'],
+    mvp_relics: ['Tough Bandages', 'Runic Pyramid'], avoid_relics: ['Snecko Eye', 'Velvet Choker'],
+    key_nodes: '弃牌猎对牌序要求很高，需要大量练习。Runic Pyramid可以保留关键牌（Eviscerate/Adrenaline）直到最佳时机打出。',
+    advanced_tips: '进阶20时，弃牌猎是最难掌握的流派之一。关键是算好每回合的费牌比。Tools of the Trade+Reflex+Tactician可以形成无限循环（弃牌→过牌→回费→再打→再弃）。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '高优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'silent', name_cn: '防御猎', name_en: 'Defense Silent',
+    description: '通过Footwork+Dexterity堆叠高格挡，配合Body Slam或毒系缓慢击杀。稳健但速度慢。',
+    core_cards: ['Footwork', 'Dodge and Roll', 'Backflip', 'Cloak and Dagger', 'Leg Sweep'],
+    support_cards: ['Blur', 'Escape Plan', 'Deflect', 'Panic Button', 'Wraith Form'],
+    key_relics: ['Ornamental Fan', 'Kunai', 'Thread and Needle', 'Calipers'],
+    avoid_cards: ['Blade Dance', 'Infinite Blades'],
+    early_game: '优先抓Dodge and Roll和Backflip。Footwork是核心（敏捷+2），遇到必抓。',
+    mid_game: '寻找第二张Footwork或Noxious Fumes（叠毒）。Blur可以让格挡不消失一回合，非常强力。',
+    late_game: '敏捷叠到6+后，Dodge and Roll给18格挡。配合Wraith Form可以3回合无敌，然后利用高格挡过渡。',
+    difficulty_rating: 3, win_rate: 0.38, recommended_ascension: 3,
+    playstyle_tags: ['defensive', 'control', 'scaling'],
+    mvp_relics: ['Ornamental Fan', 'Thread and Needle'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '防御猎怕Heart的高频攻击（12次×2伤害），需要足够格挡或Wraith Form。Donu&Deca的Buff和Debuff也需要快速处理。',
+    advanced_tips: '进阶17+时，仅靠防御难以应对，需要混入毒系作为输出手段。Footwork+After Image+Ornamental Fan可以同时堆敏捷和格挡。Wraith Form的幽灵形态每回合-1敏捷，注意时机。',
+    route_preferences: { elite: '低优先级', shop: '中优先级', event: '中优先级', rest: '高优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'defect', name_cn: '闪电球', name_en: 'Lightning Defect',
+    description: '通过生成大量闪电充能球，利用Electrodynamics和Barrage打出爆炸AOE伤害。',
+    core_cards: ['Ball Lightning', 'Electrodynamics', 'Barrage', 'Defragment', 'Thunder Strike'],
+    support_cards: ['Cold Snap', 'Charge Battery', 'Rebound', 'Loop', 'Biased Cognition'],
+    key_relics: ['Cracked Core', 'Nuclear Battery', 'Runic Capacitor', 'Symbiotic Virus'],
+    avoid_cards: ['Chill', 'Glacier'],
+    early_game: '优先抓Ball Lightning和Cold Snap。Defragment（集中力+1）是全局增益，越早抓越好。',
+    mid_game: '寻找Electrodynamics（全场闪电AOE）和Barrage（每个充能球打4伤害）。Electrodynamics配合3-4个闪电球可以清场。',
+    late_game: '集中力叠到4+后，每个闪电球回合结束打8-10伤害。Thunder Strike（X费，每生成过一个闪电球打3伤害）可以打60+伤害。',
+    difficulty_rating: 2, win_rate: 0.44, recommended_ascension: 0,
+    playstyle_tags: ['orb', 'aoe', 'scaling'],
+    mvp_relics: ['Cracked Core', 'Nuclear Battery', 'Runic Capacitor'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '球系怕Awakened One（每生成一个充能球+2力量），需要控制球的数量或使用冰霜球防御。Reptomancer的小刀会快速激发球，可能导致球不够。',
+    advanced_tips: '进阶17+时，Biased Cognition（集中力+4，每回合-1）是双刃剑，需要Artifact（抵消Debuff）或Core Surge配合。Electrodynamics会赋予敌人导电（受到闪电伤害+50%），优先击杀高威胁目标。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'defect', name_cn: '冰霜球', name_en: 'Frost Defect',
+    description: '通过冰霜充能球每回合自动叠甲，配合Glacier和Barrier实现极高防御。稳扎稳打的控制流派。',
+    core_cards: ['Glacier', 'Cold Snap', 'Barrier', 'Defragment', 'Chill'],
+    support_cards: ['Charge Battery', 'Rebound', 'Boot Sequence', 'White Noise', 'Stack'],
+    key_relics: ['Frozen Egg', 'Ice Cream', 'Orange Pellets', 'Runic Capacitor'],
+    avoid_cards: ['Ball Lightning', 'Electrodynamics'],
+    early_game: '优先抓Cold Snap（攻击+冰霜球）和Glacier（大量叠甲+2冰霜球）。Defragment越早越好。',
+    mid_game: '寻找Barrier（本回合未被击破的格挡转为下回合保留）和Stack（手牌数×3格挡）。配合冰霜球的自动叠甲，防御极其稳固。',
+    late_game: '集中力4+时，每个冰霜球回合结束给8+格挡。配合Barrier可以无限累积。面对Heart的高频攻击也能从容应对。',
+    difficulty_rating: 2, win_rate: 0.46, recommended_ascension: 0,
+    playstyle_tags: ['defensive', 'orb', 'control'],
+    mvp_relics: ['Frozen Egg', 'Runic Capacitor'], avoid_relics: ['Ectoplasm', 'Snecko Eye'],
+    key_nodes: '冰霜球需要一定输出手段，考虑混入1-2张闪电球牌（如Thunder Strike）或依靠Capacitor（充能球位+2）增加球的数量。',
+    advanced_tips: '进阶17+时，纯冰霜可能输出不够。推荐冰火双修：冰霜防御+闪电输出。Blizzard（手牌中冰霜牌数量×2伤害）是纯冰系的输出手段。面对Time Eater时，注意球的数量和回合节奏。',
+    route_preferences: { elite: '中优先级', shop: '中优先级', event: '中优先级', rest: '高优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'defect', name_cn: '黑暗球', name_en: 'Dark Defect',
+    description: '通过黑暗充能球每回合积攒伤害，激发时释放巨额单体伤害。配合Multi-Cast和Loop实现多次激发。',
+    core_cards: ['Darkness', 'Doom and Gloom', 'Multi-Cast', 'Loop', 'Double Energy'],
+    support_cards: ['Defragment', 'Consume', 'Capacitor', 'Amplify', 'Chaos'],
+    key_relics: ['Runic Capacitor', 'Nuclear Battery', 'Data Disk'],
+    avoid_cards: ['Glacier', 'Chill'],
+    early_game: '优先抓Darkness（生成黑暗球）和Doom and Gloom（攻击+黑暗球）。黑暗球初始伤害不高，需要时间成长。',
+    mid_game: '寻找Multi-Cast（激发最右侧充能球2次）和Loop（每回合激发最右侧球1次）。配合Capacitor增加球位，可以存更多黑暗球。',
+    late_game: '黑暗球叠到30+伤害后，Multi-Cast可以一次打出60+。配合Double Energy+Multi-Cast可以一回合打3次激发。',
+    difficulty_rating: 3, win_rate: 0.35, recommended_ascension: 5,
+    playstyle_tags: ['orb', 'burst', 'scaling'],
+    mvp_relics: ['Runic Capacitor', 'Nuclear Battery'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '黑暗球怕多敌人场面（AOE不足），需要Electrodynamics或其他AOE辅助。Awakened One会因为你生成球而成长，需要控制节奏。',
+    advanced_tips: '进阶17+时，黑暗球成长速度变慢（敌人血量增加），需要更多Multi-Cast支持。Amplify（下一张能力牌触发2次）配合Loop可以让Loop一回合触发2次，加速黑暗球成长。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'defect', name_cn: '离合器', name_en: 'Claw Defect',
+    description: '围绕Claw（0费，每打出一次伤害+2）构建，通过大量低费牌快速循环，让Claw伤害无限成长。',
+    core_cards: ['Claw', 'Hologram', 'All For One', 'Scrape', 'Go for the Eyes'],
+    support_cards: ['Beam Cell', 'Sweeping Beam', 'Boot Sequence', 'Steam Barriers', 'Rebound'],
+    key_relics: ['Pen Nib', 'Nunchaku', 'Kunai', 'Ornamental Fan'],
+    avoid_cards: ['Doom and Gloom', 'Meteor Strike'],
+    early_game: '开局找Claw，越多越好。Hologram可以回收Claw（从弃牌堆拿回手牌）。所有0费牌都是好牌。',
+    mid_game: '寻找All For One（将所有0费牌从弃牌堆拿回手牌），这是核心发动机。Scrape（0费，抽3弃1）过牌+触发Claw。',
+    late_game: '一回合打出8-10张Claw，每张Claw伤害20+。配合Hologram+All For One可以无限循环。Pen Nib每10张牌双倍，配合高频出牌极其强力。',
+    difficulty_rating: 4, win_rate: 0.30, recommended_ascension: 10,
+    playstyle_tags: ['combo', '0_cost', 'infinite'],
+    mvp_relics: ['Pen Nib', 'Nunchaku'], avoid_relics: ['Snecko Eye', 'Velvet Choker'],
+    key_nodes: '离合器需要精简牌库（15张左右），否则抽不到Claw。优先在商店移除高费牌。All For One+Claw+Hologram可以形成无限循环。',
+    advanced_tips: '进阶20时，离合器是最具挑战性也最有趣的流派。关键是牌库管理和费牌比计算。Steam Barriers（0费格挡）可以解决防御问题。面对Heart时，注意疲劳伤害会随着回合增加。',
+    route_preferences: { elite: '高优先级', shop: '高优先级', event: '低优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'watcher', name_cn: '愤怒观', name_en: 'Wrath Watcher',
+    description: '通过Wrath姿态双倍伤害，配合进入/退出姿态牌快速切换，打出爆发伤害。高风险高回报。',
+    core_cards: ['Wrath', 'Empty Fist', 'Empty Mind', 'Flurry of Blows', 'Tantrum'],
+    support_cards: ['Crush Joints', 'Sash Whip', 'Crescendo', 'Tranquility', 'Meditate'],
+    key_relics: ['Duality', 'Teardrop Locket', 'Violet Plume', 'Damaru'],
+    avoid_cards: ['Collect', 'Pressure Points'],
+    early_game: '优先抓Empty Fist（退出姿态给1费）和Empty Mind（退出姿态抽2）。Tantrum是强力攻击+进入愤怒。',
+    mid_game: '寻找Flurry of Blows（每切换一次姿态回手，0费）和Meditate（选择2张牌回手+进入平静）。愤怒观的核心是频繁切换姿态。',
+    late_game: '一回合切换2-3次姿态，每次Wrath下打出高伤牌。Flurry of Blows可以打3-4次。配合Talk to the Hand（攻击给格挡）解决防御。',
+    difficulty_rating: 4, win_rate: 0.35, recommended_ascension: 5,
+    playstyle_tags: ['stance', 'burst', 'high_risk'],
+    mvp_relics: ['Teardrop Locket', 'Duality'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '愤怒观最大的风险是被敌人一击秒杀（Wrath下受到双倍伤害）。必须学会在敌人高伤前退出Wrath。Donu&Deca的Buff回合是爆发窗口。',
+    advanced_tips: '进阶17+时，愤怒观需要极其精确的姿态管理。Collect（将手牌放入圣牌堆，下回合拿回）可以跳过敌人的高伤回合。Violet Plume遗物（进入平静给3格挡）非常适合愤怒观。',
+    route_preferences: { elite: '高优先级', shop: '中优先级', event: '中优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'watcher', name_cn: '平静观', name_en: 'Calm Watcher',
+    description: '通过Calm姿态每回合额外获得2费，配合Mental Fortress和Like Water实现稳健攻防。',
+    core_cards: ['Calm', 'Mental Fortress', 'Like Water', 'Fear No Evil', 'Inner Peace'],
+    support_cards: ['Empty Fist', 'Empty Mind', 'Crescendo', 'Tranquility', 'Meditate'],
+    key_relics: ['Violet Plume', 'Teardrop Locket', 'Duality', 'Orange Pellets'],
+    avoid_cards: ['Collect', 'Master Reality'],
+    early_game: '优先抓Tranquility（进入平静）和Inner Peace（牌库空时进入平静抽2）。Like Water（每回合平静给5格挡）非常强力。',
+    mid_game: '寻找Mental Fortress（切换姿态时获得格挡，平静→愤怒给12格挡）。Fear No Evil（敌人意图攻击时进入平静）可以自动维持平静。',
+    late_game: '每回合平静给2额外费用，配合Devotion（每回合进入神性）可以每回合获得3费。Rushdown（进入愤怒抽2）+Devotion形成过牌循环。',
+    difficulty_rating: 3, win_rate: 0.40, recommended_ascension: 3,
+    playstyle_tags: ['stance', 'control', 'energy'],
+    mvp_relics: ['Violet Plume', 'Teardrop Locket'], avoid_relics: ['Snecko Eye', 'Runic Dome'],
+    key_nodes: '平静观需要1-2张退出姿态牌（Empty Fist/Mind）来切换姿态获取费用。不要一直停留在平静而不输出。',
+    advanced_tips: '进阶17+时，平静观+Devotion+Rushdown是最稳健的Watcher流派之一。每回合自动进入神性（3费+3伤害），然后退出进入平静（+2费），再进入愤怒（Rushdown抽2），一回合净赚4费+过牌。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'watcher', name_cn: '神性观', name_en: 'Divinity Watcher',
+    description: '通过Devotion每回合自动积攒神性，进入Divinity姿态后获得3费且伤害三倍。终极形态流派。',
+    core_cards: ['Devotion', 'Blasphemy', 'Prostrate', 'Prayer', 'Worship'],
+    support_cards: ['Empty Fist', 'Empty Mind', 'Meditate', 'Fasting', 'Foreign Influence'],
+    key_relics: ['Damaru', 'Cloak Clasp', 'Teardrop Locket', 'Violet Plume'],
+    avoid_cards: ['Collect', 'Simmering Fury'],
+    early_game: '优先抓Devotion（每回合+1神性计数）。Prostrate（进入平静+2神性）加速积攒。Blasphemy可以立即进入神性但下回合死亡，用于紧急爆发。',
+    mid_game: '寻找Worship（生成Miracle牌，0费回1费+1神性）和Fasting（+3力量+3敏捷，每回合-1费）。Fasting在神性下极其强力。',
+    late_game: '每回合自动进入神性（3费+3倍伤害），一回合可以打出巨额爆发。配合Fasting+3力量，一张Ragnarok可以打100+伤害。',
+    difficulty_rating: 5, win_rate: 0.25, recommended_ascension: 15,
+    playstyle_tags: ['stance', 'divinity', 'burst'],
+    mvp_relics: ['Damaru', 'Cloak Clasp'], avoid_relics: ['Snecko Eye', 'Runic Dome'],
+    key_nodes: '神性观最怕积攒过程中被击杀，需要足够防御（Mental Fortress/Like Water）。Blasphemy是双刃剑，只在确保能击杀敌人时使用。',
+    advanced_tips: '进阶20时，神性观是最难但最强的流派。关键是算好神性积攒速度和安全窗口。Cloak Clasp（每保留1格挡给1伤害）配合平静给的格挡可以在神性下打出极高伤害。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '高优先级', rest: '低优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'watcher', name_cn: '点穴观', name_en: 'Pressure Points Watcher',
+    description: '围绕Pressure Points（给敌人Mark，每回合伤害递增）构建，配合Scry（预知）精确控制牌序。',
+    core_cards: ['Pressure Points', 'Cut Through Fate', 'Scrawl', 'Nirvana', 'Third Eye'],
+    support_cards: ['Foresight', 'Sands of Time', 'Meditate', 'Tranquility', 'Inner Peace'],
+    key_relics: ['Golden Eye', 'Teardrop Locket', 'Duality'],
+    avoid_cards: ['Devotion', 'Blasphemy'],
+    early_game: '优先抓Pressure Points（越多越好）和Cut Through Fate（攻击+Scry 2）。Scry可以滤牌找到Pressure Points。',
+    mid_game: '寻找Nirvana（Scry时获得格挡）解决防御问题。Scrawl（抽牌直到手牌满）可以大量过牌找到Pressure Points。',
+    late_game: '每回合给敌人叠2-3层Mark，第5回合开始每回合20+伤害。配合Scry精确控制，一回合可以给BOSS叠5层Mark。',
+    difficulty_rating: 3, win_rate: 0.38, recommended_ascension: 5,
+    playstyle_tags: ['scry', 'mark', 'control'],
+    mvp_relics: ['Golden Eye', 'Teardrop Locket'], avoid_relics: ['Snecko Eye'],
+    key_nodes: '点穴观怕多敌人场面（一次只能给一个敌人上Mark），需要1-2张AOE（Conclude/Simmering Fury）。',
+    advanced_tips: '进阶17+时，点穴观需要多张Pressure Points支撑。Sands of Time（保留，每被保留一次费用-1，伤害+5）可以配合Scry精确打出。Golden Eye遗物（预知额外看2张）极大提升Scry效率。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts2', character: 'necrobinder', name_cn: '魂球法', name_en: 'Soul Orb Necrobinder',
+    description: '围绕灵魂充能球构建，通过Bind Spirit生成魂球，Soul Siphon恢复生命，Soul Burst输出伤害。',
+    core_cards: ['Bind Spirit', 'Soul Siphon', 'Soul Burst', 'Spirit Channel', 'Soul Bloom'],
+    support_cards: ['Dead Grasp', 'Raise Dead', 'Soul Burn', 'Defend', 'Strike'],
+    key_relics: ['Necrotic Grimoire', 'Soul Vessel', 'Ectoplasmic Orb'],
+    avoid_cards: ['Soul Burn'],
+    early_game: '优先抓Bind Spirit（生成魂球+格挡）和Spirit Channel（生成魂球+过牌）。Soul Burst是主要输出。',
+    mid_game: '寻找Soul Siphon（激发魂球恢复生命）解决续航。Soul Bloom（每回合生成2魂球）是全局增益。',
+    late_game: '魂球数量达到4+后，每回合自动输出+恢复。Dead Grasp配合激发可以打出巨额伤害。',
+    difficulty_rating: 3, win_rate: 0.35, recommended_ascension: 0,
+    playstyle_tags: ['orb', 'sustain', 'scaling'],
+    mvp_relics: ['Soul Vessel', 'Necrotic Grimoire'], avoid_relics: ['Ectoplasm'],
+    key_nodes: 'StS2数据尚不完整，此流派基于EA阶段已知卡牌构建。随正式版更新需调整。',
+    advanced_tips: 'StS2 EA阶段，魂球法的核心循环是生成→激发→恢复。注意魂球被激发后消失，需要持续生成。Raise Dead可以回收消耗的牌维持循环。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts2', character: 'necrobinder', name_cn: '亡者法', name_en: 'Dead Necrobinder',
+    description: '通过Raise Dead回收消耗堆中的攻击牌，配合Soul Burn消耗手牌获取能量，形成消耗→回收循环。',
+    core_cards: ['Raise Dead', 'Soul Burn', 'Dead Grasp', 'Exhume', 'Soul Siphon'],
+    support_cards: ['Bind Spirit', 'Spirit Channel', 'Defend', 'Strike', 'Offering'],
+    key_relics: ['Charon\'s Ashes', 'Dead Branch', 'Necrotic Grimoire'],
+    avoid_cards: ['Soul Bloom'],
+    early_game: '优先抓Raise Dead和Soul Burn。Soul Burn消耗手牌获取能量，Raise Dead回收消耗的牌。',
+    mid_game: '寻找Exhume（从消耗堆选择一张牌拿回手牌）作为Raise Dead的补充。Dead Grasp在激发魂球后追加伤害。',
+    late_game: '消耗堆中应有足够的攻击牌支撑循环。配合Charon\'s Ashes（消耗牌时对所有敌人造成3伤害）可以AOE清场。',
+    difficulty_rating: 4, win_rate: 0.30, recommended_ascension: 5,
+    playstyle_tags: ['exhaust', 'combo', 'recycle'],
+    mvp_relics: ['Charon\'s Ashes', 'Dead Branch'], avoid_relics: ['Ectoplasm'],
+    key_nodes: '亡者法最怕消耗堆被清空。确保有足够的攻击牌被消耗。配合Feeling No Pain（StS2可能改名）可以获得防御。',
+    advanced_tips: 'StS2 EA阶段，亡者法是Necrobinder的高风险高回报流派。核心是维持消耗→回收的平衡。随正式版更新需大幅调整。',
+    route_preferences: { elite: '高优先级', shop: '高优先级', event: '高优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts2', character: 'regent', name_cn: '力量王', name_en: 'Strength Regent',
+    description: '通过Coronation和Kingly Decree积累力量Buff，配合高伤攻击牌打出爆发。力量体系在StS2中依然强力。',
+    core_cards: ['Coronation', 'Kingly Decree', 'Royal Command', 'Ascendancy', 'Absolute Rule'],
+    support_cards: ['Strike', 'Defend', 'Strike', 'Bash', 'Flex'],
+    key_relics: ['Crown of Thorns', 'Scepter of Might', 'Royal Seal'],
+    avoid_cards: ['Clothesline'],
+    early_game: '优先抓Coronation（0费+力量）和Kingly Decree（格挡+下张攻击增伤）。Royal Command是高伤+过牌。',
+    mid_game: '寻找Ascendancy（力量越高伤害越高）和Absolute Rule（每回合自动+力量+格挡）。',
+    late_game: '力量叠到10+后，Ascendancy可以打30+伤害。Absolute Rule每回合自动成长，越后期越强。',
+    difficulty_rating: 2, win_rate: 0.40, recommended_ascension: 0,
+    playstyle_tags: ['strength', 'scaling', 'aggro'],
+    mvp_relics: ['Scepter of Might', 'Crown of Thorns'], avoid_relics: ['Snecko Eye'],
+    key_nodes: 'StS2数据尚不完整，力量王基于EA阶段已知卡牌构建。随正式版更新需调整。',
+    advanced_tips: 'StS2 EA阶段，Regent的力量体系与Ironclad类似但更灵活。Coronation的0费特性让其更容易快速叠力量。',
+    route_preferences: { elite: '高优先级', shop: '中优先级', event: '低优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts2', character: 'regent', name_cn: '统御王', name_en: 'Command Regent',
+    description: '围绕Royal Command和命令体系构建，通过抽牌和费用管理实现高效运转。',
+    core_cards: ['Royal Command', 'Kingly Decree', 'Absolute Rule', 'Defend', 'Strike'],
+    support_cards: ['Coronation', 'Ascendancy', 'Backstab', 'Dagger Throw'],
+    key_relics: ['Royal Seal', 'Scepter of Might', 'Crown of Thorns'],
+    avoid_cards: ['Clothesline'],
+    early_game: '优先抓Royal Command（2费12伤+抽牌）和Kingly Decree。抽牌体系需要一定支撑。',
+    mid_game: '寻找Absolute Rule（全局增益）。抽牌+力量双重成长。',
+    late_game: '一回合可以打出多张Royal Command，配合力量Buff持续输出。',
+    difficulty_rating: 3, win_rate: 0.35, recommended_ascension: 3,
+    playstyle_tags: ['draw', 'command', 'scaling'],
+    mvp_relics: ['Royal Seal', 'Scepter of Might'], avoid_relics: ['Snecko Eye'],
+    key_nodes: 'StS2数据尚不完整，统御王基于EA阶段已知卡牌构建。随正式版更新需调整。',
+    advanced_tips: 'StS2 EA阶段，统御王的费用管理很关键。Kingly Decree的格挡+增伤让下一张攻击牌更高效。',
+    route_preferences: { elite: '中优先级', shop: '高优先级', event: '中优先级', rest: '中优先级' }
+  },
+  {
+    game_version: 'sts1', character: 'colorless', name_cn: '通用强力牌', name_en: 'Universal Power Cards',
+    description: '无色牌不绑定特定角色，任何角色都可能从商店或事件中获得。了解这些牌的价值对每种流派都很重要。',
+    core_cards: ['Apotheosis', 'Mind Blast', 'Jack of All Trades', 'Madness', 'The Bomb'],
+    support_cards: ['Panic Button', 'Impatience', 'Forethought', 'Good Instincts', 'Finesse'],
+    key_relics: ['Prismatic Shard', 'Cauldron', 'Orrery'],
+    avoid_cards: ['Deep Breath'],
+    early_game: 'Apotheosis（升级所有手牌）是神牌，任何流派拿到都赚。Mind Blast（费用=牌库数量，对所有敌人造成伤害）在精简牌库时很弱。',
+    mid_game: 'Madness（使一张手牌本回合0费）配合高费强力牌（如Meteor Strike）极其强力。Jack of All Trades（随机获得1攻击1技能1能力）随机性强但平均值高。',
+    late_game: 'The Bomb（3回合后对所有敌人打52伤害）可以跳过困难回合。Forethought（将手牌放入牌库底，下回合0费）可以让关键牌提前准备好。',
+    difficulty_rating: 1, win_rate: 0.50, recommended_ascension: 0,
+    playstyle_tags: ['universal', 'situational', 'event'],
+    mvp_relics: ['Prismatic Shard', 'Cauldron'], avoid_relics: ['Runic Dome'],
+    key_nodes: '无色牌通常在商店购买（费用较高），但某些事件可以免费获得。Prismatic Shard遗物让你可以抓其他角色的牌，极大扩展构建可能。',
+    advanced_tips: '进阶17+时，某些无色牌的价值会改变。Panic Button（获得30格挡，下回合不能出牌）可以作为紧急防御。Impatience（手牌中无攻击牌时抽2）在防御流派中很有用。',
+    route_preferences: { elite: '低优先级', shop: '高优先级', event: '高优先级', rest: '低优先级' }
+  }
+];
+
+// 插入语句
+const insert = db.prepare(`
+  INSERT INTO archetypes (
+    game_version, character, name_cn, name_en, description,
+    core_cards, support_cards, key_relics, avoid_cards,
+    early_game, mid_game, late_game,
+    difficulty_rating, win_rate, recommended_ascension,
+    playstyle_tags, mvp_relics, avoid_relics, key_nodes, advanced_tips,
+    route_preferences, data_source, updated_at
+  ) VALUES (
+    ?, ?, ?, ?, ?,
+    ?, ?, ?, ?,
+    ?, ?, ?,
+    ?, ?, ?,
+    ?, ?, ?, ?, ?,
+    ?, 'manual', CURRENT_TIMESTAMP
+  )
+`);
+
+const tx = db.transaction((seeds) => {
+  for (const s of seeds) {
+    insert.run(
+      s.game_version, s.character, s.name_cn, s.name_en, s.description,
+      JSON.stringify(s.core_cards),
+      JSON.stringify(s.support_cards),
+      JSON.stringify(s.key_relics),
+      JSON.stringify(s.avoid_cards),
+      s.early_game, s.mid_game, s.late_game,
+      s.difficulty_rating, s.win_rate, s.recommended_ascension,
+      JSON.stringify(s.playstyle_tags),
+      JSON.stringify(s.mvp_relics),
+      JSON.stringify(s.avoid_relics),
+      s.key_nodes, s.advanced_tips,
+      JSON.stringify(s.route_preferences)
+    );
+  }
+});
+
+tx(archetypeSeeds);
+
+console.log(`已插入 ${archetypeSeeds.length} 条流派记录`);
+
+// 验证
+const count = db.prepare('SELECT COUNT(*) as c FROM archetypes').get();
+console.log('archetypes 总数:', count.c);
+
+const byChar = db.prepare('SELECT character, COUNT(*) as c FROM archetypes GROUP BY character').all();
+console.log('按角色分布:', byChar);
+
+db.close();
